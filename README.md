@@ -2,6 +2,17 @@
 
 A macOS app for importing credit card statements, classifying transactions with AI, and analyzing spending patterns.
 
+## Download & Install
+
+1. Download **[Spender.dmg](https://github.com/shuaidop/spender/releases/latest/download/Spender.dmg)** from the latest release
+2. Open the DMG file
+3. Drag **Spender** to your **Applications** folder
+4. On first launch: right-click the app → **Open** → click **Open** (required once for unsigned apps)
+5. Go to **Settings → API Key** and enter your [OpenAI API key](https://platform.openai.com/api-keys) to enable AI features
+6. Start importing credit card statements from the **Import** tab
+
+> **Requirements:** macOS 14.0 (Sonoma) or later. AI features require an OpenAI API key. The app works without one, but auto-categorization and AI chat/analysis will be disabled.
+
 ## Features
 
 - **PDF Statement Import** — Parse Chase and Amex credit card PDF statements automatically
@@ -23,14 +34,17 @@ A macOS app for importing credit card statements, classifying transactions with 
 - **OpenAI Swift SDK** — Transaction classification and AI chat/analysis
 - **CoreXLSX** — Excel statement parsing support
 
-## Requirements
+---
+
+## Development
+
+### Requirements
 
 - macOS 14.0+
 - Xcode 16.0+
 - Swift 6.0
-- OpenAI API key (for AI classification and chat features)
 
-## Setup
+### Setup
 
 1. Clone the repository:
    ```bash
@@ -47,13 +61,9 @@ A macOS app for importing credit card statements, classifying transactions with 
    xcodegen generate
    ```
 
-3. Build and run (Cmd+R in Xcode)
+3. Build and run (Cmd+R in Xcode). Swift packages resolve automatically.
 
-4. Go to **Settings > API Key** and enter your OpenAI API key
-
-5. Import your first credit card statement via the **Import** tab
-
-## Project Structure
+### Project Structure
 
 ```
 Spender/
@@ -74,6 +84,20 @@ Spender/
     ├── Settings/      # API key, card management, category management
     ├── Sidebar/       # Navigation sidebar
     └── Transactions/  # Transaction list, detail, and filters
+```
+
+### Running Tests
+
+```bash
+xcodebuild test -scheme Spender -destination 'platform=macOS'
+```
+
+### Building for Distribution
+
+```bash
+xcodebuild archive -scheme Spender -destination 'platform=macOS' -archivePath /tmp/Spender.xcarchive
+cp -R /tmp/Spender.xcarchive/Products/Applications/Spender.app build/
+hdiutil create -volname Spender -srcfolder build/Spender.app -ov -format UDZO build/Spender.dmg
 ```
 
 ## License
