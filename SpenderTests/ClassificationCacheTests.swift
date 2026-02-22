@@ -8,21 +8,19 @@ final class ClassificationCacheTests: XCTestCase {
     private var container: ModelContainer!
     private var context: ModelContext!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
         let schema = Schema([
             Transaction.self, SpendingCategory.self, Card.self,
             ImportSession.self, ClassificationCache.self,
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        container = try! ModelContainer(for: schema, configurations: [config])
+        container = try ModelContainer(for: schema, configurations: [config])
         context = container.mainContext
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         container = nil
         context = nil
-        super.tearDown()
     }
 
     // MARK: - Helpers
