@@ -9,23 +9,21 @@ final class AnalysisEngineTests: XCTestCase {
     private var context: ModelContext!
     private var engine: AnalysisEngine!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
         let schema = Schema([
             Transaction.self, SpendingCategory.self, Card.self,
             ImportSession.self, ClassificationCache.self,
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        container = try! ModelContainer(for: schema, configurations: [config])
+        container = try ModelContainer(for: schema, configurations: [config])
         context = container.mainContext
         engine = AnalysisEngine(modelContext: context)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         engine = nil
         container = nil
         context = nil
-        super.tearDown()
     }
 
     // MARK: - Helpers
