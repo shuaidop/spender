@@ -1,38 +1,37 @@
-# Xcode
-*.xcodeproj/xcuserdata/
-*.xcworkspace/xcuserdata/
-DerivedData/
+# Build artifacts
 build/
-*.pbxuser
-*.mode1v3
-*.mode2v3
-*.perspectivev3
-*.xcuserstate
-*.xccheckout
-*.xcscmblueprint
-*.hmap
-*.ipa
-*.dSYM.zip
-*.dSYM
-
-# Swift Package Manager
+DerivedData/
 .build/
-Packages/
-Package.pins
-Package.resolved
-*.xcodeproj
+*.xcarchive
 
-# Backend
-backend/node_modules/
-backend/dist/
-backend/.wrangler/
+# Xcode user-specific
+*.xcuserdata
+xcuserdata/
+*.xcworkspace
+!*.xcodeproj/project.xcworkspace/
 
-# Environment
-.env
-.env.local
-*.env
+# Distribution
+*.dmg
+*.zip
+*.ipa
+
+# Personal financial documents
+*.pdf
+*.xlsx
+amex_pdf/
+fils/
+test_data_ignored/
+categories.txt
 
 # macOS
 .DS_Store
-.AppleDouble
-.LSOverride
+*.swp
+*~
+
+# Swift Package Manager
+.swiftpm/
+Package.resolved
+
+# Misc
+*.log
+.claude/

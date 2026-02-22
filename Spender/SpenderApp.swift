@@ -3,57 +3,67 @@ import SwiftData
 
 @main
 struct SpenderApp: App {
-    let modelContainer: ModelContainer
-    @StateObject private var container = DIContainer()
+    let sharedModelContainer: ModelContainer
 
     init() {
         do {
-            let schema = Schema([
-                Account.self,
+            sharedModelContainer = try ModelContainer(for:
                 Transaction.self,
-                Category.self,
-                SpendingSummary.self,
-                SyncCursor.self,
-                UserSettings.self,
-            ])
-            let config = ModelConfiguration(
-                "SpenderStore",
-                schema: schema,
-                isStoredInMemoryOnly: false
-            )
-            modelContainer = try ModelContainer(
-                for: schema,
-                configurations: [config]
+                Card.self,
+                SpendingCategory.self,
+                ClassificationCache.self,
+                ImportSession.self,
+                ChatMessage.self
             )
         } catch {
             fatalError("Failed to create ModelContainer: \(error)")
         }
+
+        // Seed default categories and add any new ones from updated defaults
+        let context = sharedModelContainer.mainContext
+        let descriptor = FetchDescriptor<SpendingCategory>()
+        let existing = (try? context.fetch(descriptor)) ?? []
+        let existingNames = Set(existing.map(\.name))
+
+        if existing.isEmpty {
+            // Fresh install: seed all defaults
+            for (index, cat) in SpendingCategory.defaults.enumerated() {
+                let category = SpendingCategory(
+                    name: cat.name,
+                    iconName: cat.icon,
+                    colorHex: cat.color,
+                    sortOrder: index
+                )
+                context.insert(category)
+            }
+        } else {
+            // Existing install: add any new categories that don't exist yet
+            for (index, cat) in SpendingCategory.defaults.enumerated() {
+                if !existingNames.contains(cat.name) {
+                    let category = SpendingCategory(
+                        name: cat.name,
+                        iconName: cat.icon,
+                        colorHex: cat.color,
+                        sortOrder: index
+                    )
+                    context.insert(category)
+                }
+            }
+        }
+        try? context.save()
     }
 
     var body: some Scene {
         WindowGroup {
-            AppTabView()
-                .environmentObject(container)
-                .onAppear {
-                    seedDataIfNeeded()
-                }
+            ContentView()
         }
-        .modelContainer(modelContainer)
-    }
+        .modelContainer(sharedModelContainer)
+        .windowStyle(.titleBar)
+        .defaultSize(width: 1200, height: 800)
 
-    private func seedDataIfNeeded() {
-        let context = modelContainer.mainContext
-        do {
-            try Category.seedCategories(in: context)
-
-            // Ensure UserSettings exists
-            let settingsDescriptor = FetchDescriptor<UserSettings>()
-            if try context.fetchCount(settingsDescriptor) == 0 {
-                context.insert(UserSettings())
-                try context.save()
-            }
-        } catch {
-            print("Failed to seed data: \(error)")
+        Settings {
+            SettingsView()
         }
+        .modelContainer(sharedModelContainer)
     }
 }

@@ -1,32 +1,19 @@
 import Foundation
+import SwiftData
 
-enum ChatRole: String, Codable {
-    case user
-    case assistant
-}
+@Model
+final class ChatMessage {
+    var id: UUID
+    var role: String
+    var content: String
+    var timestamp: Date
+    var conversationId: UUID
 
-enum ChatAttachment: Codable {
-    case spendingChart(chartType: String, periodType: String)
-    case transactionList(transactionIDs: [String])
-    case summaryCard(summaryText: String)
-}
-
-struct ChatMessageData: Identifiable, Codable {
-    let id: UUID
-    let role: ChatRole
-    let content: String
-    let timestamp: Date
-    let attachments: [ChatAttachment]?
-
-    init(
-        role: ChatRole,
-        content: String,
-        attachments: [ChatAttachment]? = nil
-    ) {
+    init(role: String, content: String, conversationId: UUID) {
         self.id = UUID()
         self.role = role
         self.content = content
         self.timestamp = Date()
-        self.attachments = attachments
+        self.conversationId = conversationId
     }
 }

@@ -2,112 +2,155 @@ import SwiftUI
 import SwiftData
 
 struct SettingsView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var accounts: [Account]
-    @Query private var settings: [UserSettings]
-    @State private var showConnectAccount = false
-    @State private var showDeleteConfirmation = false
+    var body: some View {
+        TabView {
+            CardManagementView()
+                .tabItem {
+                    Label("Cards", systemImage: "creditcard.fill")
+                }
 
-    private var userSettings: UserSettings? {
-        settings.first
+            CategoryManagementView()
+                .tabItem {
+                    Label("Categories", systemImage: "tag.fill")
+                }
+
+            APIKeySettingsView()
+                .tabItem {
+                    Label("API Key", systemImage: "key.fill")
+                }
+        }
+        .frame(width: 550, height: 450)
     }
+}
+
+struct DataManagementView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Query private var transactions: [Transaction]
+    @Query private var importSessions: [ImportSession]
+    @Query private var cacheEntries: [ClassificationCache]
+    @Query private var categories: [SpendingCategory]
+    @Query private var cards: [Card]
+    @Query private var chatMessages: [ChatMessage]
+    @State private var showDeleteConfirmation = false
+    @State private var deleteAction: (() -> Void)?
+    @State private var deleteMessage = ""
 
     var body: some View {
-        NavigationStack {
-            List {
-                // Connected Accounts
-                Section("Connected Accounts") {
-                    ForEach(accounts) { account in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(account.institutionName)
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
-                                Text("\(account.accountName) (\(account.mask))")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Developer Tools")
+                    .font(.title2.bold())
+
+                GroupBox("Database Statistics") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        LabeledContent("Transactions", value: "\(transactions.count)")
+                        LabeledContent("Import Sessions", value: "\(importSessions.count)")
+                        LabeledContent("Classification Cache", value: "\(cacheEntries.count)")
+                        LabeledContent("Categories", value: "\(categories.count)")
+                        LabeledContent("Cards", value: "\(cards.count)")
+                        LabeledContent("Chat Messages", value: "\(chatMessages.count)")
+                    }
+                    .padding(4)
+                }
+
+                GroupBox("Delete Data") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        deleteButton("Delete All Transactions (\(transactions.count))", disabled: transactions.isEmpty) {
+                            for txn in transactions { modelContext.delete(txn) }
+                            for session in importSessions { modelContext.delete(session) }
+                            try? modelContext.save()
+                        }
+
+                        deleteButton("Delete All Import Sessions (\(importSessions.count))", disabled: importSessions.isEmpty) {
+                            for session in importSessions { modelContext.delete(session) }
+                            try? modelContext.save()
+                        }
+
+                        deleteButton("Clear Classification Cache (\(cacheEntries.count))", disabled: cacheEntries.isEmpty) {
+                            for entry in cacheEntries { modelContext.delete(entry) }
+                            try? modelContext.save()
+                        }
+
+                        deleteButton("Delete All Chat History (\(chatMessages.count))", disabled: chatMessages.isEmpty) {
+                            for msg in chatMessages { modelContext.delete(msg) }
+                            try? modelContext.save()
+                        }
+
+                        deleteButton("Delete All Cards (\(cards.count))", disabled: cards.isEmpty) {
+                            for card in cards { modelContext.delete(card) }
+                            try? modelContext.save()
+                        }
+
+                        deleteButton("Reset Categories to Defaults", disabled: false) {
+                            for cat in categories { modelContext.delete(cat) }
+                            try? modelContext.save()
+                            // Re-seed defaults
+                            for (index, def) in SpendingCategory.defaults.enumerated() {
+                                let cat = SpendingCategory(name: def.name, iconName: def.icon, colorHex: def.color, sortOrder: index)
+                                modelContext.insert(cat)
                             }
-                            Spacer()
-                            if account.isActive {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(.green)
+                            try? modelContext.save()
+                        }
+
+                        Divider()
+
+                        deleteButton("NUKE: Delete Everything", disabled: false) {
+                            for txn in transactions { modelContext.delete(txn) }
+                            for session in importSessions { modelContext.delete(session) }
+                            for entry in cacheEntries { modelContext.delete(entry) }
+                            for msg in chatMessages { modelContext.delete(msg) }
+                            for card in cards { modelContext.delete(card) }
+                            for cat in categories { modelContext.delete(cat) }
+                            try? modelContext.save()
+                        }
+                    }
+                    .padding(4)
+                }
+
+                GroupBox("Storage") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        let dbPath = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?.appendingPathComponent("default.store").path ?? "unknown"
+                        LabeledContent("DB Path") {
+                            Text(dbPath)
+                                .font(.caption2)
+                                .textSelection(.enabled)
+                                .lineLimit(1)
+                        }
+
+                        Button("Open DB Folder in Finder") {
+                            if let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }
+
+                        Button("Clear UserDefaults (API key etc.)") {
+                            if let bundleId = Bundle.main.bundleIdentifier {
+                                UserDefaults.standard.removePersistentDomain(forName: bundleId)
                             }
                         }
                     }
-
-                    Button {
-                        showConnectAccount = true
-                    } label: {
-                        Label("Connect Account", systemImage: "plus.circle")
-                    }
-                }
-
-                // Sync
-                Section("Sync") {
-                    if let lastSync = accounts.compactMap(\.lastSyncedAt).max() {
-                        LabeledContent("Last Sync") {
-                            Text(lastSync, format: .relative(presentation: .named))
-                        }
-                    }
-
-                    Button {
-                        // Sync will be connected in Phase 2
-                    } label: {
-                        Label("Sync Now", systemImage: "arrow.triangle.2.circlepath")
-                    }
-                }
-
-                // Data Management
-                Section("Data Management") {
-                    if let settings = userSettings {
-                        Picker("Retention Period", selection: Binding(
-                            get: { settings.dataRetentionMonths },
-                            set: { newValue in
-                                settings.dataRetentionMonths = newValue
-                                try? modelContext.save()
-                            }
-                        )) {
-                            Text("6 months").tag(6)
-                            Text("12 months").tag(12)
-                            Text("24 months").tag(24)
-                        }
-                    }
-
-                    Button(role: .destructive) {
-                        showDeleteConfirmation = true
-                    } label: {
-                        Label("Clear All Data", systemImage: "trash")
-                    }
-                }
-
-                // About
-                Section("About") {
-                    LabeledContent("Version", value: "1.0.0")
+                    .padding(4)
                 }
             }
-            .navigationTitle("Settings")
-            .sheet(isPresented: $showConnectAccount) {
-                AccountConnectionView()
+            .padding()
+        }
+        .alert("Confirm Delete", isPresented: $showDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { deleteAction = nil }
+            Button("Delete", role: .destructive) {
+                deleteAction?()
+                deleteAction = nil
             }
-            .confirmationDialog("Clear All Data?", isPresented: $showDeleteConfirmation) {
-                Button("Clear All Data", role: .destructive) {
-                    clearAllData()
-                }
-            } message: {
-                Text("This will permanently delete all transactions and disconnect all accounts. This cannot be undone.")
-            }
+        } message: {
+            Text(deleteMessage)
         }
     }
 
-    private func clearAllData() {
-        do {
-            try modelContext.delete(model: Transaction.self)
-            try modelContext.delete(model: Account.self)
-            try modelContext.delete(model: SpendingSummary.self)
-            try modelContext.delete(model: SyncCursor.self)
-            try modelContext.save()
-        } catch {
-            print("Failed to clear data: \(error)")
+    private func deleteButton(_ title: String, disabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(title, role: .destructive) {
+            deleteMessage = "Are you sure? This cannot be undone."
+            deleteAction = action
+            showDeleteConfirmation = true
         }
+        .disabled(disabled)
     }
 }

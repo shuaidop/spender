@@ -1,119 +1,213 @@
 import SwiftUI
+import SwiftData
 
 struct ChatView: View {
-    @State private var inputText = ""
-    @State private var messages: [ChatMessageData] = []
-    @State private var isLoading = false
+    @Environment(\.modelContext) private var modelContext
+    @State private var viewModel = ChatViewModel()
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("Chat")
+                    .font(.title.bold())
+
+                Spacer()
+
+                Picker("Context", selection: $viewModel.contextScope) {
+                    ForEach(ContextScope.allCases) { scope in
+                        Text(scope.rawValue).tag(scope)
+                    }
+                }
+                .frame(maxWidth: 160)
+
+                Button {
+                    viewModel.newConversation()
+                } label: {
+                    Label("New Chat", systemImage: "plus.bubble")
+                }
+            }
+            .padding()
+
+            Divider()
+
+            if !viewModel.isConfigured {
+                ContentUnavailableView(
+                    "API Key Required",
+                    systemImage: "key.fill",
+                    description: Text("Configure your OpenAI API key in Settings to use the chat feature.")
+                )
+            } else {
                 // Messages
                 ScrollViewReader { proxy in
                     ScrollView {
-                        LazyVStack(spacing: 12) {
-                            if messages.isEmpty {
-                                chatEmptyState
+                        LazyVStack(alignment: .leading, spacing: 12) {
+                            if viewModel.messages.isEmpty {
+                                VStack(spacing: 12) {
+                                    Image(systemName: "bubble.left.and.bubble.right")
+                                        .font(.system(size: 48))
+                                        .foregroundStyle(.secondary)
+                                    Text("Ask me about your spending")
+                                        .font(.title3)
+                                        .foregroundStyle(.secondary)
+
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        SuggestionChip(text: "What are my top spending categories?", viewModel: viewModel)
+                                        SuggestionChip(text: "How can I reduce my monthly expenses?", viewModel: viewModel)
+                                        SuggestionChip(text: "Show me my subscription spending", viewModel: viewModel)
+                                        SuggestionChip(text: "What unusual charges do you see?", viewModel: viewModel)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.top, 60)
                             }
 
-                            ForEach(messages) { message in
+                            ForEach(viewModel.messages) { message in
                                 ChatBubbleView(message: message)
                                     .id(message.id)
                             }
 
-                            if isLoading {
+                            // Streaming message
+                            if viewModel.isStreaming && !viewModel.currentStreamText.isEmpty {
+                                ChatBubbleView(
+                                    message: ChatMessage(role: "assistant", content: viewModel.currentStreamText, conversationId: viewModel.conversationId)
+                                )
+                                .id("streaming")
+                            }
+
+                            if viewModel.isStreaming && viewModel.currentStreamText.isEmpty {
                                 HStack {
                                     ProgressView()
-                                        .padding(.horizontal)
-                                    Spacer()
+                                        .scaleEffect(0.7)
+                                    Text("Thinking...")
+                                        .foregroundStyle(.secondary)
                                 }
-                                .id("loading")
+                                .padding(.leading, 16)
                             }
                         }
                         .padding()
                     }
-                    .onChange(of: messages.count) {
-                        if let last = messages.last {
+                    .onChange(of: viewModel.messages.count) { _, _ in
+                        if let lastId = viewModel.messages.last?.id {
                             withAnimation {
-                                proxy.scrollTo(last.id, anchor: .bottom)
+                                proxy.scrollTo(lastId, anchor: .bottom)
                             }
+                        }
+                    }
+                    .onChange(of: viewModel.currentStreamText) { _, _ in
+                        withAnimation {
+                            proxy.scrollTo("streaming", anchor: .bottom)
                         }
                     }
                 }
 
+                // Error
+                if let error = viewModel.errorMessage {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.red)
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Dismiss") {
+                            viewModel.errorMessage = nil
+                        }
+                        .font(.caption)
+                    }
+                    .padding(.horizontal)
+                    .padding(.vertical, 4)
+                    .background(.red.opacity(0.1))
+                }
+
                 Divider()
 
-                // Input bar
-                HStack(spacing: 12) {
-                    TextField("Ask about your spending...", text: $inputText, axis: .vertical)
-                        .textFieldStyle(.plain)
-                        .lineLimit(1...4)
-
-                    Button {
-                        sendMessage()
-                    } label: {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.title2)
-                    }
-                    .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
-                }
-                .padding(.horizontal)
-                .padding(.vertical, 10)
-                .background(.ultraThinMaterial)
-            }
-            .navigationTitle("Chat")
-        }
-    }
-
-    private var chatEmptyState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 48))
-                .foregroundStyle(.secondary)
-
-            Text("Ask me about your spending")
-                .font(.headline)
-                .foregroundStyle(.secondary)
-
-            VStack(alignment: .leading, spacing: 8) {
-                SuggestionChip(text: "What did I spend most on this month?")
-                SuggestionChip(text: "How can I reduce my subscriptions?")
-                SuggestionChip(text: "Compare this month vs last month")
+                // Input
+                ChatInputView(viewModel: viewModel)
             }
         }
-        .padding(.top, 60)
-    }
-
-    private func sendMessage() {
-        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-
-        let userMessage = ChatMessageData(role: .user, content: text)
-        messages.append(userMessage)
-        inputText = ""
-        isLoading = true
-
-        // Chat functionality will be connected to OpenAI in Phase 3
-        Task {
-            try? await Task.sleep(for: .seconds(1))
-            let response = ChatMessageData(
-                role: .assistant,
-                content: "Chat will be connected to OpenAI in a future update. I'll be able to analyze your spending patterns and give personalized advice."
-            )
-            messages.append(response)
-            isLoading = false
+        .onAppear {
+            viewModel.setup(modelContext: modelContext)
         }
     }
 }
 
-private struct SuggestionChip: View {
-    let text: String
+struct ChatBubbleView: View {
+    let message: ChatMessage
+
+    var isUser: Bool { message.role == "user" }
 
     var body: some View {
-        Text(text)
-            .font(.subheadline)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(.quaternary, in: Capsule())
+        HStack {
+            if isUser { Spacer(minLength: 80) }
+
+            VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
+                Text(message.content)
+                    .textSelection(.enabled)
+                    .padding(12)
+                    .background(
+                        isUser ? Color.accentColor : Color(.controlBackgroundColor),
+                        in: RoundedRectangle(cornerRadius: 12)
+                    )
+                    .foregroundStyle(isUser ? .white : .primary)
+
+                Text(DateFormatters.shortDate.string(from: message.timestamp))
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+
+            if !isUser { Spacer(minLength: 80) }
+        }
+    }
+}
+
+struct ChatInputView: View {
+    @Bindable var viewModel: ChatViewModel
+
+    var body: some View {
+        HStack(spacing: 8) {
+            TextField("Ask about your spending...", text: $viewModel.inputText, axis: .vertical)
+                .textFieldStyle(.plain)
+                .lineLimit(1...5)
+                .onSubmit {
+                    if !viewModel.isStreaming {
+                        Task { await viewModel.sendMessage() }
+                    }
+                }
+
+            Button {
+                Task { await viewModel.sendMessage() }
+            } label: {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.title2)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(
+                viewModel.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || viewModel.isStreaming
+                ? .secondary : Color.accentColor
+            )
+            .disabled(viewModel.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || viewModel.isStreaming)
+        }
+        .padding(12)
+        .background(.bar)
+    }
+}
+
+struct SuggestionChip: View {
+    let text: String
+    @Bindable var viewModel: ChatViewModel
+
+    var body: some View {
+        Button {
+            viewModel.inputText = text
+            Task { await viewModel.sendMessage() }
+        } label: {
+            Text(text)
+                .font(.subheadline)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(.quaternary, in: Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }
