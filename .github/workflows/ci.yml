@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app
+
+      - name: Resolve packages
+        run: xcodebuild -resolvePackageDependencies -scheme Spender
+
+      - name: Build
+        run: xcodebuild build -scheme Spender -destination 'platform=macOS' -configuration Debug
+
+      - name: Test
+        run: xcodebuild test -scheme Spender -destination 'platform=macOS' -skip-testing:SpenderTests/LLMCategoryProbeTest

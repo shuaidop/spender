@@ -1,0 +1,45 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-test-release:
+    runs-on: macos-15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app
+
+      - name: Resolve packages
+        run: xcodebuild -resolvePackageDependencies -scheme Spender
+
+      - name: Run tests
+        run: xcodebuild test -scheme Spender -destination 'platform=macOS' -skip-testing:SpenderTests/LLMCategoryProbeTest
+
+      - name: Archive
+        run: xcodebuild archive -scheme Spender -destination 'platform=macOS' -archivePath $RUNNER_TEMP/Spender.xcarchive
+
+      - name: Export app
+        run: |
+          mkdir -p build
+          cp -R $RUNNER_TEMP/Spender.xcarchive/Products/Applications/Spender.app build/
+
+      - name: Create DMG
+        run: |
+          mkdir -p dmg_contents
+          cp -R build/Spender.app dmg_contents/
+          ln -s /Applications dmg_contents/Applications
+          hdiutil create -volname Spender -srcfolder dmg_contents -ov -format UDZO build/Spender.dmg
+          rm -rf dmg_contents
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/Spender.dmg
+          generate_release_notes: true
